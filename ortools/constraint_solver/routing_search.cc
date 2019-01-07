@@ -28,6 +28,8 @@
 #include "ortools/graph/christofides.h"
 #include "ortools/util/bitset.h"
 #include "ortools/util/saturated_arithmetic.h"
+#include <sys/time.h>
+#include <fstream>
 
 DEFINE_bool(routing_strong_debug_checks, false,
             "Run stronger checks in debug; these stronger tests might change "
@@ -724,6 +726,7 @@ class PathCumulFilter : public BasePathFilter {
   const std::string name_;
 
   bool lns_detected_;
+  int64 hstBound;
 };
 
 PathCumulFilter::PathCumulFilter(const RoutingModel& routing_model,
@@ -741,6 +744,7 @@ PathCumulFilter::PathCumulFilter(const RoutingModel& routing_model,
       current_cumul_cost_values_(),
       cumul_cost_delta_(0),
       global_span_cost_coefficient_(dimension.global_span_cost_coefficient()),
+      hstBound(dimension.hstBound),
       vehicle_span_cost_coefficients_(
           dimension.vehicle_span_cost_coefficients()),
       has_nonzero_vehicle_span_cost_coefficients_(false),
@@ -930,11 +934,15 @@ void PathCumulFilter::OnBeforeSynchronizePaths() {
             CapAdd(current_cumul_cost_value,
                    GetPathCumulSoftLowerBoundCost(current_path_transits_, r));
       }
+
       current_cumul_cost_values_[Start(r)] = current_cumul_cost_value;
       current_max_end_.path_values[r] = cumul;
-      if (current_max_end_.cumul_value < cumul) {
-        current_max_end_.cumul_value = cumul;
-        current_max_end_.cumul_value_support = r;
+
+      if ((hstBound>0 && r < hstBound) || (hstBound == 0)){
+        if (current_max_end_.cumul_value < cumul) {
+          current_max_end_.cumul_value = cumul;
+          current_max_end_.cumul_value_support = r;
+        }
       }
       total_current_cumul_cost_value_ =
           CapAdd(total_current_cumul_cost_value_, current_cumul_cost_value);
@@ -945,9 +953,11 @@ void PathCumulFilter::OnBeforeSynchronizePaths() {
       const int64 start = ComputePathMaxStartFromEndCumul(
           current_path_transits_, r, current_max_end_.cumul_value);
       current_min_start_.path_values[r] = start;
-      if (current_min_start_.cumul_value > start) {
-        current_min_start_.cumul_value = start;
-        current_min_start_.cumul_value_support = r;
+      if ((hstBound>0 && r < hstBound) || (hstBound == 0)){
+        if (current_min_start_.cumul_value > start) {
+          current_min_start_.cumul_value = start;
+          current_min_start_.cumul_value_support = r;
+        }
       }
     }
   }
@@ -1032,6 +1042,8 @@ bool PathCumulFilter::AcceptPath(int64 path_start, int64 chain_start,
   if (FilterSpanCost() || FilterCumulSoftBounds() || FilterSlackCost() ||
       FilterCumulSoftLowerBounds() || FilterCumulPiecewiseLinearCosts()) {
     delta_paths_.insert(GetPath(path_start));
+    //printf("which path? %ld\n", path_start);
+
     delta_max_end_cumul_ = std::max(delta_max_end_cumul_, cumul);
     cumul_cost_delta_ =
         CapSub(cumul_cost_delta_, current_cumul_cost_values_[path_start]);
@@ -1040,6 +1052,10 @@ bool PathCumulFilter::AcceptPath(int64 path_start, int64 chain_start,
 }
 
 bool PathCumulFilter::FinalizeAcceptPath() {
+  static int counter = 0;
+  static long int ts = 0;
+  static char buffer[1024];
+
   if ((!FilterSpanCost() && !FilterCumulSoftBounds() && !FilterSlackCost() &&
        !FilterCumulSoftLowerBounds() && !FilterCumulPiecewiseLinearCosts()) ||
       lns_detected_) {
@@ -1054,54 +1070,80 @@ bool PathCumulFilter::FinalizeAcceptPath() {
   int64 new_max_end = delta_max_end_cumul_;
   int64 new_min_start = kint64max;
   if (FilterSpanCost()) {
-    if (new_max_end < current_max_end_.cumul_value) {
-      // Delta max end is lower than the current solution one.
-      // If the path supporting the current max end has been modified, we need
-      // to check all paths to find the largest max end.
-      if (!gtl::ContainsKey(delta_paths_,
-                            current_max_end_.cumul_value_support)) {
-        new_max_end = current_max_end_.cumul_value;
-      } else {
-        for (int i = 0; i < current_max_end_.path_values.size(); ++i) {
-          if (current_max_end_.path_values[i] > new_max_end &&
-              !gtl::ContainsKey(delta_paths_, i)) {
-            new_max_end = current_max_end_.path_values[i];
+    // we add hstBound, so we should only consider the first hstBound path;
+    if (hstBound > 0 ) {
+      new_max_end = kint64min;
+
+      //printf("%ld, %ld\n", hstBound, current_max_end_.path_values.size());
+
+      for (int i = 0; i < std::min((unsigned long)hstBound, current_max_end_.path_values.size());/*current_max_end_.path_values.size();*/ ++i) {
+            if (current_max_end_.path_values[i] > new_max_end /*&&
+                !gtl::ContainsKey(delta_paths_, i)*/) {
+              new_max_end = current_max_end_.path_values[i];
+        }
+      }
+
+      for (int r = 0; r < std::min((unsigned long)hstBound, current_max_end_.path_values.size()); ++r) {
+          new_min_start = std::min(new_min_start,
+                                   ComputePathMaxStartFromEndCumul(
+                                       current_path_transits_, r, new_max_end));
+      }
+
+
+
+
+
+    } else {
+      if (new_max_end < current_max_end_.cumul_value) {
+        // Delta max end is lower than the current solution one.
+        // If the path supporting the current max end has been modified, we need
+        // to check all paths to find the largest max end.
+        if (!gtl::ContainsKey(delta_paths_,
+                              current_max_end_.cumul_value_support)) {
+          new_max_end = current_max_end_.cumul_value;
+        } else {
+          for (int i = 0; i < current_max_end_.path_values.size(); ++i) {
+            if (current_max_end_.path_values[i] > new_max_end &&
+                !gtl::ContainsKey(delta_paths_, i)) {
+              new_max_end = current_max_end_.path_values[i];
+            }
           }
         }
       }
-    }
-    // Now that the max end cumul has been found, compute the corresponding
-    // min start cumul, first from the delta, then if the max end cumul has
-    // changed, from the unchanged paths as well.
-    for (int r = 0; r < delta_path_transits_.NumPaths(); ++r) {
-      new_min_start = std::min(
-          ComputePathMaxStartFromEndCumul(delta_path_transits_, r, new_max_end),
-          new_min_start);
-    }
-    if (new_max_end != current_max_end_.cumul_value) {
-      for (int r = 0; r < NumPaths(); ++r) {
-        if (gtl::ContainsKey(delta_paths_, r)) {
-          continue;
-        }
-        new_min_start = std::min(new_min_start,
-                                 ComputePathMaxStartFromEndCumul(
-                                     current_path_transits_, r, new_max_end));
+      // Now that the max end cumul has been found, compute the corresponding
+      // min start cumul, first from the delta, then if the max end cumul has
+      // changed, from the unchanged paths as well.
+      for (int r = 0; r < delta_path_transits_.NumPaths(); ++r) {
+        new_min_start = std::min(
+            ComputePathMaxStartFromEndCumul(delta_path_transits_, r, new_max_end),
+            new_min_start);
       }
-    } else if (new_min_start > current_min_start_.cumul_value) {
-      // Delta min start is greater than the current solution one.
-      // If the path supporting the current min start has been modified, we need
-      // to check all paths to find the smallest min start.
-      if (!gtl::ContainsKey(delta_paths_,
-                            current_min_start_.cumul_value_support)) {
-        new_min_start = current_min_start_.cumul_value;
-      } else {
-        for (int i = 0; i < current_min_start_.path_values.size(); ++i) {
-          if (current_min_start_.path_values[i] < new_min_start &&
-              !gtl::ContainsKey(delta_paths_, i)) {
-            new_min_start = current_min_start_.path_values[i];
+      if (new_max_end != current_max_end_.cumul_value) {
+        for (int r = 0; r < NumPaths(); ++r) {
+          if (gtl::ContainsKey(delta_paths_, r)) {
+            continue;
+          }
+          new_min_start = std::min(new_min_start,
+                                   ComputePathMaxStartFromEndCumul(
+                                       current_path_transits_, r, new_max_end));
+        }
+      } else if (new_min_start > current_min_start_.cumul_value) {
+        // Delta min start is greater than the current solution one.
+        // If the path supporting the current min start has been modified, we need
+        // to check all paths to find the smallest min start.
+        if (!gtl::ContainsKey(delta_paths_,
+                              current_min_start_.cumul_value_support)) {
+          new_min_start = current_min_start_.cumul_value;
+        } else {
+          for (int i = 0; i < current_min_start_.path_values.size(); ++i) {
+            if (current_min_start_.path_values[i] < new_min_start &&
+                !gtl::ContainsKey(delta_paths_, i)) {
+              new_min_start = current_min_start_.path_values[i];
+            }
           }
         }
       }
+
     }
   }
   // Cleaning up for the next delta.
@@ -1114,6 +1156,31 @@ bool PathCumulFilter::FinalizeAcceptPath() {
       CapAdd(CapAdd(injected_objective_value_, cumul_cost_delta_),
              CapProd(global_span_cost_coefficient_,
                      CapSub(new_max_end, new_min_start)));
+  counter = counter + 1;
+
+  if (counter % 10000 == 0){
+
+    // log to file !
+
+    struct timeval tp;
+    gettimeofday(&tp, NULL);
+    long int ms = tp.tv_sec * 1000 + tp.tv_usec / 1000;
+
+    sprintf(buffer, "Mark2 %d %ld %ld %ld %ld %ld %ld %ld\n", counter, ms-ts, new_max_end, new_min_start, injected_objective_value_, cumul_cost_delta_, new_objective_value, cost_var_->Max());
+ 
+    
+    std::ofstream outfile;
+
+    outfile.open("log.txt", std::ios_base::app);
+    outfile << buffer; 
+
+    printf(buffer);
+
+    if (ts == 0) {
+      ts = ms;
+    }
+
+  }
   PropagateObjectiveValue(new_objective_value);
   // Only compare to max as a cost lower bound is computed.
   return new_objective_value <= cost_var_->Max();

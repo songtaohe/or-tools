@@ -662,14 +662,14 @@ RoutingSearchParameters RoutingModel::DefaultSearchParameters() {
       "local_search_operators {"
       "  use_relocate: true"
       "  use_relocate_pair: true"
-      "  use_relocate_neighbors: false"
+      "  use_relocate_neighbors: true" // change to true 
       "  use_exchange: true"
       "  use_cross: true"
-      "  use_cross_exchange: false"
+      "  use_cross_exchange: false" 
       "  use_two_opt: true"
       "  use_or_opt: true"
       "  use_lin_kernighan: true"
-      "  use_tsp_opt: false"
+      "  use_tsp_opt: false" 
       "  use_make_active: true"
       "  use_relocate_and_make_active: false"  // costly if true by default
       "  use_make_inactive: true"
@@ -1868,6 +1868,9 @@ void RoutingModel::CloseModelWithParameters(
   for (int i = 0; i < same_vehicle_costs_.size(); ++i) {
     cost_elements.push_back(CreateSameVehicleCost(i));
   }
+
+  printf("number of cost var\n", cost_elements.size());
+
   cost_ = solver_->MakeSum(cost_elements)->Var();
   cost_->set_name("Cost");
 
@@ -4633,6 +4636,7 @@ RoutingDimension::RoutingDimension(RoutingModel* model,
       base_dimension_(base_dimension),
       global_span_cost_coefficient_(0),
       model_(model),
+      hstBound(0),
       name_(name) {
   CHECK(model != nullptr);
   vehicle_span_upper_bounds_.assign(model->vehicles(), kint64max);
@@ -5538,22 +5542,48 @@ void RoutingDimension::SetupGlobalSpanCost(
   Solver* const solver = model_->solver();
   if (global_span_cost_coefficient_ != 0) {
     std::vector<IntVar*> end_cumuls;
-    for (int i = 0; i < model_->vehicles(); ++i) {
+
+
+    printf("Mark %lu\n", hstBound);
+
+
+    int64 bound = 0;
+
+    if (hstBound > 0) {
+      bound = hstBound;
+    } else {
+      bound = model_->vehicles();
+    }
+
+
+    for (int i = 0; i < bound; ++i) {
       end_cumuls.push_back(cumuls_[model_->End(i)]);
     }
+
     IntVar* const max_end_cumul = solver->MakeMax(end_cumuls)->Var();
     model_->AddVariableMinimizedByFinalizer(max_end_cumul);
     std::vector<IntVar*> start_cumuls;
-    for (int i = 0; i < model_->vehicles(); ++i) {
+    for (int i = 0; i < bound; ++i) {
       start_cumuls.push_back(cumuls_[model_->Start(i)]);
     }
-    IntVar* const min_start_cumul = solver->MakeMin(start_cumuls)->Var();
-    model_->AddVariableMaximizedByFinalizer(min_start_cumul);
-    cost_elements->push_back(
-        solver
-            ->MakeProd(solver->MakeDifference(max_end_cumul, min_start_cumul),
-                       global_span_cost_coefficient_)
-            ->Var());
+
+
+    if (hstBound > 0){
+      cost_elements->push_back(
+          solver
+              ->MakeProd(max_end_cumul,
+                         global_span_cost_coefficient_)
+              ->Var());
+    } else {
+
+      IntVar* const min_start_cumul = solver->MakeMin(start_cumuls)->Var();
+      model_->AddVariableMaximizedByFinalizer(min_start_cumul);
+      cost_elements->push_back(
+          solver
+              ->MakeProd(solver->MakeDifference(max_end_cumul, min_start_cumul),
+                         global_span_cost_coefficient_)
+              ->Var());
+    }
   }
 }
 

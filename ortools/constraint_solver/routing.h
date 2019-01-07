@@ -1363,6 +1363,8 @@ class RoutingModelVisitor : public BaseObject {
 // make the model faster and easier to solve.
 class RoutingDimension {
  public:
+  int64 hstBound;
+  
   ~RoutingDimension();
   // Returns the model on which the dimension was created.
   RoutingModel* model() const { return model_; }
@@ -1424,6 +1426,12 @@ class RoutingDimension {
   // global_span_cost =
   //   coefficient * (Max(dimension end value) - Min(dimension start value)).
   void SetGlobalSpanCostCoefficient(int64 coefficient);
+
+
+
+  void SetGlobalSpanCostCoefficientMask(int64 bound) {
+      hstBound = bound;
+  }
 
 #ifndef SWIG
   // Sets a piecewise linear cost on the cumul variable of a given node.
@@ -1688,6 +1696,8 @@ class RoutingDimension {
   // Finalize the model of the dimension.
   void CloseModel(bool use_light_propagation);
 
+
+  
   std::vector<IntVar*> cumuls_;
   std::vector<SortedDisjointIntervalList> forbidden_intervals_;
   std::vector<IntVar*> capacity_vars_;
