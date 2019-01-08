@@ -1351,6 +1351,8 @@ class PathOperator : public IntVarLocalSearchOperator {
   const bool ignore_path_vars_;
   int next_base_to_increment_;
 
+  std::vector<int64> path_starts_;
+
  private:
   void OnStart() override;
   // Called by OnStart() after initializing node information. Should be
@@ -1380,7 +1382,7 @@ class PathOperator : public IntVarLocalSearchOperator {
   std::vector<int> base_nodes_;
   std::vector<int> end_nodes_;
   std::vector<int> base_paths_;
-  std::vector<int64> path_starts_;
+  
   std::vector<bool> inactives_;
   bool just_started_;
   bool first_start_;
@@ -1429,6 +1431,7 @@ class TwoOpt;
 class Relocate;
 class Exchange;
 class Cross;
+class DroneBalance;
 class MakeActiveOperator;
 class MakeInactiveOperator;
 class MakeChainInactiveOperator;
@@ -1437,6 +1440,13 @@ class ExtendedSwapActiveOperator;
 class MakeActiveAndRelocate;
 class RelocateAndMakeActiveOperator;
 class RelocateAndMakeInactiveOperator;
+
+
+LocalSearchOperator* MakeDroneBalanceLSO(Solver* solver, const std::vector<IntVar*>& vars,
+    const std::vector<IntVar*>& secondary_vars,
+    std::function<int(int64)> start_empty_path_class,
+    int64 hstBound);
+
 
 // ----- Local Search Filters ------
 

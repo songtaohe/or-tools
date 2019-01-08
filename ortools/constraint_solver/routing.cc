@@ -3855,7 +3855,14 @@ void RoutingModel::CreateNeighborhoodOperators() {
            CostsAreHomogeneousAcrossVehicles() ? empty : vehicle_vars_,
            vehicle_start_class_callback_, pickup_delivery_pairs_)});
   CP_ROUTING_ADD_OPERATOR2(EXCHANGE, Exchange);
+
   CP_ROUTING_ADD_OPERATOR2(CROSS, Cross);
+  //CP_ROUTING_ADD_OPERATOR2(DRONEBALANCE, DroneBalance);
+
+  local_search_operators_[DRONEBALANCE] = MakeDroneBalanceLSO(solver_.get(), nexts_, CostsAreHomogeneousAcrossVehicles() ? std::vector<IntVar*>(): vehicle_vars_, vehicle_start_class_callback_, hstBound);
+
+
+
   CP_ROUTING_ADD_OPERATOR2(TWO_OPT, TwoOpt);
   CP_ROUTING_ADD_OPERATOR(OR_OPT, OROPT);
   CP_ROUTING_ADD_CALLBACK_OPERATOR(LIN_KERNIGHAN, LK);
@@ -3894,6 +3901,7 @@ LocalSearchOperator* RoutingModel::GetNeighborhoodOperators(
     CP_ROUTING_PUSH_OPERATOR(RELOCATE, relocate, operators);
     CP_ROUTING_PUSH_OPERATOR(EXCHANGE, exchange, operators);
     CP_ROUTING_PUSH_OPERATOR(CROSS, cross, operators);
+    CP_ROUTING_PUSH_OPERATOR(DRONEBALANCE, cross, operators);
   }
   if (!pickup_delivery_pairs_.empty() ||
       search_parameters.local_search_operators().use_relocate_neighbors()) {

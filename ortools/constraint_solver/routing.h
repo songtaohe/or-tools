@@ -194,6 +194,7 @@ struct SweepNode;
 
 class RoutingModel {
  public:
+  int64 hstBound;
   // Status of the search.
   enum Status {
     // Problem not solved yet (before calling RoutingModel::Solve()).
@@ -371,6 +372,11 @@ class RoutingModel {
 
   static RoutingModelParameters DefaultModelParameters();
   static RoutingSearchParameters DefaultSearchParameters();
+
+
+  void SethstBound(int64 a){
+    hstBound = a;
+  }
 
   // Model creation
 
@@ -1060,6 +1066,7 @@ class RoutingModel {
     RELOCATE_NEIGHBORS,
     EXCHANGE,
     CROSS,
+    DRONEBALANCE,
     CROSS_EXCHANGE,
     TWO_OPT,
     OR_OPT,

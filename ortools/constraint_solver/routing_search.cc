@@ -987,6 +987,10 @@ bool PathCumulFilter::AcceptPath(int64 path_start, int64 chain_start,
   const int64 capacity = vehicle_capacities_[vehicle];
   // Evaluating route length to reserve memory to store transit information.
   int number_of_route_arcs = 0;
+
+
+  printf("Mark7 accept path pathcumulfilter \n");
+
   while (node < Size()) {
     const int64 next = GetNext(node);
     // TODO(user): This shouldn't be needed anymore as the such deltas should
@@ -1056,6 +1060,9 @@ bool PathCumulFilter::FinalizeAcceptPath() {
   static long int ts = 0;
   static char buffer[1024];
 
+
+  int64  dist[128];
+
   if ((!FilterSpanCost() && !FilterCumulSoftBounds() && !FilterSlackCost() &&
        !FilterCumulSoftLowerBounds() && !FilterCumulPiecewiseLinearCosts()) ||
       lns_detected_) {
@@ -1081,6 +1088,8 @@ bool PathCumulFilter::FinalizeAcceptPath() {
                 !gtl::ContainsKey(delta_paths_, i)*/) {
               new_max_end = current_max_end_.path_values[i];
         }
+
+        dist[i] = current_max_end_.path_values[i];
       }
 
       for (int r = 0; r < std::min((unsigned long)hstBound, current_max_end_.path_values.size()); ++r) {
@@ -1158,7 +1167,7 @@ bool PathCumulFilter::FinalizeAcceptPath() {
                      CapSub(new_max_end, new_min_start)));
   counter = counter + 1;
 
-  if (counter % 10000 == 0){
+  if (counter % 100000 == 0){
 
     // log to file !
 
@@ -1166,8 +1175,16 @@ bool PathCumulFilter::FinalizeAcceptPath() {
     gettimeofday(&tp, NULL);
     long int ms = tp.tv_sec * 1000 + tp.tv_usec / 1000;
 
-    sprintf(buffer, "Mark2 %d %ld %ld %ld %ld %ld %ld %ld\n", counter, ms-ts, new_max_end, new_min_start, injected_objective_value_, cumul_cost_delta_, new_objective_value, cost_var_->Max());
+    char * lp = buffer;
+
+    lp += sprintf(buffer, "Mark2 %d %ld %ld %ld %ld %ld %ld %ld   \t\t", counter, ms-ts, new_max_end, new_min_start, injected_objective_value_, cumul_cost_delta_, new_objective_value, cost_var_->Max());
  
+
+    for(int ii = 0; ii < current_max_end_.path_values.size(); ii++) {
+      lp += sprintf(lp, "%lld ", current_max_end_.path_values[ii]);
+    }
+
+    lp += sprintf(lp, "\n");
     
     std::ofstream outfile;
 

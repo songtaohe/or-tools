@@ -545,6 +545,10 @@ void PathOperator::InitializePathStarts() {
       new_path_starts.push_back(i);
     }
   }
+
+  printf("PathOperator::InitializePathStarts  Number of starts %d\n", new_path_starts.size());
+
+
   if (!first_start_) {
     // Synchronizing base_paths_ with base node positions. When the last move
     // was performed a base node could have been moved to a new route in which
@@ -910,6 +914,10 @@ bool Cross::MakeNeighbor() {
   const int64 start0 = StartNode(0);
   const int64 node1 = BaseNode(1);
   const int64 start1 = StartNode(1);
+
+
+  //printf("Cross %ld %ld %ld %ld Path: %ld %ld  Next: %ld %ld \n", node0, start0, node1, start1, Path(node0), Path(node1), Next(start0), Next(start1));
+
   if (start1 == start0) {
     return false;
   }
@@ -927,6 +935,157 @@ bool Cross::MakeNeighbor() {
   }
   return false;
 }
+
+
+bool hst_global_dronebalance = false;
+
+
+class DroneBalance : public PathOperator {
+ public:
+  DroneBalance(const std::vector<IntVar*>& vars,
+        const std::vector<IntVar*>& secondary_vars,
+        std::function<int(int64)> start_empty_path_class,
+        int64 hstBound)
+      : PathOperator(vars, secondary_vars, 1,
+                     std::move(start_empty_path_class)), hstBound(hstBound) {}
+  ~DroneBalance() override {}
+  bool MakeNeighbor() override;
+
+  std::string DebugString() const override { return "DroneBalance"; }
+
+  int64 hstBound;
+
+};
+
+bool DroneBalance::MakeNeighbor() {
+  const int64 node0 = BaseNode(0);
+  const int64 start0 = StartNode(0);
+  const int64 node1 = BaseNode(1);
+  const int64 start1 = StartNode(1);
+
+  static int swap_c = 0;
+
+  bool ret = false;
+  //printf("DroneBalance %ld %ld %ld %ld Path: %ld %ld  Next: %ld %ld \n", node0, start0, node1, start1, Path(node0), Path(node1), Next(start0), Next(start1));
+
+  // printf("num of paths %d\n", path_starts_.size());
+
+
+  // for (int r = 0; r < path_starts_.size(); ++r) {
+  //   int64 cur_node = path_starts_[r];
+
+  //   char buffer[1024];
+  //   char* lp = buffer;
+
+  //   while(true) {
+  //     lp += sprintf(lp, "%d -> ", cur_node);
+
+  //     if (IsPathEnd(cur_node)) {
+  //       printf("path %d : %s\n", r, buffer);
+  //       break;
+  //     } else {
+  //       cur_node = Next(cur_node);
+  //     }
+  //   }
+  // }
+
+
+  printf("Mark3 %d %d\n", node0, path_starts_[0]);
+
+  // if (node0 != path_starts_[0]) {
+  //   return false;
+  // }
+
+
+  int64 min_path_id = -1;
+  int64 min_path_len = kint64max;
+
+  int64 max_path_id = -1;
+  int64 max_path_len = kint64min;
+
+
+  for (int r = 0; r < std::min(hstBound, int64(path_starts_.size())); ++r) {
+    int64 c = 0;
+    int64 cur_node = path_starts_[r];
+
+    while(true) {
+      if (IsPathEnd(cur_node)) {
+        //printf("path %d : %s\n", r, buffer);
+        break;
+      } else {
+        cur_node = Next(cur_node);
+        c = c + 1;
+      }
+    }
+
+    if (c < min_path_len) {
+      min_path_len = c;
+      min_path_id = r;
+    } 
+
+    if (c > max_path_len) {
+      max_path_len = c;
+      max_path_id = r;
+    }
+  }
+
+
+  if (min_path_id == -1 || max_path_id == -1){
+    ret = false;
+  } else if (min_path_id == max_path_id) {
+    ret = false;
+  } else {
+    ret = MoveChain(Next(path_starts_[max_path_id]), Next(Next(Next(path_starts_[max_path_id]))), path_starts_[min_path_id]);
+
+  }
+
+  if (ret == true) {
+    hst_global_dronebalance = true;
+  }
+
+  printf("%d %d %d %d %d\n", ret, min_path_id, max_path_id, min_path_len, max_path_len);
+
+  return ret;
+   
+
+
+
+
+
+
+  if (start1 == start0) {
+    return false;
+  }
+  if (!IsPathEnd(node0) && !IsPathEnd(node1)) {
+    // If two paths are equivalent don't exchange them.
+    if (PathClass(0) == PathClass(1) && IsPathEnd(Next(node0)) &&
+        IsPathEnd(Next(node1))) {
+      return false;
+    }
+    return MoveChain(start0, node0, start1) && MoveChain(node0, node1, start0);
+  } else if (!IsPathEnd(node0)) {
+    return MoveChain(start0, node0, start1);
+  } else if (!IsPathEnd(node1)) {
+    return MoveChain(start1, node1, start0);
+  }
+  return false;
+}
+
+
+
+
+LocalSearchOperator* MakeDroneBalanceLSO(Solver* solver, const std::vector<IntVar*>& vars,
+    const std::vector<IntVar*>& secondary_vars,
+    std::function<int(int64)> start_empty_path_class,
+    int64 hstBound) {
+
+    return solver->RevAlloc(new DroneBalance(vars,secondary_vars, start_empty_path_class,hstBound));
+
+}
+
+
+
+
 
 // ----- BaseInactiveNodeToPathOperator -----
 // Base class of path operators which make inactive nodes active.
@@ -1976,6 +2135,7 @@ MAKE_LOCAL_SEARCH_OPERATOR(TwoOpt)
 MAKE_LOCAL_SEARCH_OPERATOR(Relocate)
 MAKE_LOCAL_SEARCH_OPERATOR(Exchange)
 MAKE_LOCAL_SEARCH_OPERATOR(Cross)
+//MAKE_LOCAL_SEARCH_OPERATOR(DroneBalance)
 MAKE_LOCAL_SEARCH_OPERATOR(MakeActiveOperator)
 MAKE_LOCAL_SEARCH_OPERATOR(MakeInactiveOperator)
 MAKE_LOCAL_SEARCH_OPERATOR(MakeChainInactiveOperator)
@@ -1985,7 +2145,14 @@ MAKE_LOCAL_SEARCH_OPERATOR(MakeActiveAndRelocate)
 MAKE_LOCAL_SEARCH_OPERATOR(RelocateAndMakeActiveOperator)
 MAKE_LOCAL_SEARCH_OPERATOR(RelocateAndMakeInactiveOperator)
 
+
 #undef MAKE_LOCAL_SEARCH_OPERATOR
+
+
+
+
+
+
 
 LocalSearchOperator* Solver::MakeOperator(const std::vector<IntVar*>& vars,
                                           Solver::LocalSearchOperators op) {
@@ -2849,6 +3016,9 @@ FindOneNeighbor::FindOneNeighbor(Assignment* const assignment,
 Decision* FindOneNeighbor::Next(Solver* const solver) {
   CHECK(nullptr != solver);
 
+
+  printf("Mark1 FindOneNeighbor::Next\n");
+
   if (original_limit_ != nullptr) {
     limit_->Copy(original_limit_);
   }
@@ -2891,6 +3061,7 @@ Decision* FindOneNeighbor::Next(Solver* const solver) {
       if (!limit_->Check()) {
         solver->GetLocalSearchMonitor()->BeginMakeNextNeighbor(ls_operator_);
         has_neighbor = ls_operator_->MakeNextNeighbor(delta, deltadelta);
+        printf("Mark4 ls_operator_->MakeNextNeighbor\n");
         solver->GetLocalSearchMonitor()->EndMakeNextNeighbor(
             ls_operator_, has_neighbor, delta, deltadelta);
       }
@@ -2904,9 +3075,17 @@ Decision* FindOneNeighbor::Next(Solver* const solver) {
         solver->GetLocalSearchMonitor()->BeginFilterNeighbor(ls_operator_);
         const bool mh_filter =
             AcceptDelta(solver->ParentSearch(), delta, deltadelta);
-        const bool move_filter = FilterAccept(solver, delta, deltadelta);
+        const bool move_filter = FilterAccept(solver, delta, deltadelta) || hst_global_dronebalance;
+
+        
+
+
         solver->GetLocalSearchMonitor()->EndFilterNeighbor(
             ls_operator_, mh_filter && move_filter);
+
+        printf("Mark5 %d %d %d\n", mh_filter, move_filter, hst_global_dronebalance);
+        hst_global_dronebalance = false;
+        
         if (mh_filter && move_filter) {
           solver->filtered_neighbors_ += 1;
           assignment_copy->CopyIntersection(reference_assignment_.get());
@@ -2915,7 +3094,9 @@ Decision* FindOneNeighbor::Next(Solver* const solver) {
           const bool accept = solver->SolveAndCommit(restore);
           solver->GetLocalSearchMonitor()->EndAcceptNeighbor(ls_operator_,
                                                              accept);
-          if (accept) {
+          if (accept) { 
+            printf("Mark6 Accept\n");
+
             solver->accepted_neighbors_ += 1;
             assignment_->Store();
             neighbor_found_ = true;
@@ -2944,6 +3125,7 @@ bool FindOneNeighbor::FilterAccept(Solver* solver, const Assignment* delta,
                                    const Assignment* deltadelta) {
   bool ok = true;
   LocalSearchMonitor* const monitor = solver->GetLocalSearchMonitor();
+
   for (LocalSearchFilter* filter : filters_) {
     if (ok || filter->IsIncremental()) {
       monitor->BeginFiltering(filter);
