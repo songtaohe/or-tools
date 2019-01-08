@@ -546,7 +546,7 @@ void PathOperator::InitializePathStarts() {
     }
   }
 
-  printf("PathOperator::InitializePathStarts  Number of starts %d\n", new_path_starts.size());
+  //printf("PathOperator::InitializePathStarts  Number of starts %d\n", new_path_starts.size());
 
 
   if (!first_start_) {
