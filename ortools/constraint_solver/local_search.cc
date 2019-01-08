@@ -1044,7 +1044,7 @@ bool DroneBalance::MakeNeighbor() {
     hst_global_dronebalance = true;
   }
 
-  printf("%d %d %d %d %d\n", ret, min_path_id, max_path_id, min_path_len, max_path_len);
+  //printf("%d %d %d %d %d\n", ret, min_path_id, max_path_id, min_path_len, max_path_len);
 
   return ret;
    
