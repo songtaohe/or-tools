@@ -937,8 +937,9 @@ bool Cross::MakeNeighbor() {
 }
 
 
-bool hst_global_dronebalance = false;
+//extern bool hst_global_dronebalance;
 
+bool hst_global_dronebalance = false;
 
 class DroneBalance : public PathOperator {
  public:
@@ -990,7 +991,7 @@ bool DroneBalance::MakeNeighbor() {
   // }
 
 
-  printf("Mark3 %d %d\n", node0, path_starts_[0]);
+  //printf("Mark3 %d %d\n", node0, path_starts_[0]);
 
   // if (node0 != path_starts_[0]) {
   //   return false;
@@ -1039,7 +1040,7 @@ bool DroneBalance::MakeNeighbor() {
 
   }
 
-  if (ret == true) {
+  if (ret == true && ((min_path_len==0) || (max_path_len>min_path_len*3/2))) {
     hst_global_dronebalance = true;
   }
 
@@ -3017,7 +3018,7 @@ Decision* FindOneNeighbor::Next(Solver* const solver) {
   CHECK(nullptr != solver);
 
 
-  printf("Mark1 FindOneNeighbor::Next\n");
+  //printf("Mark1 FindOneNeighbor::Next\n");
 
   if (original_limit_ != nullptr) {
     limit_->Copy(original_limit_);
@@ -3061,7 +3062,7 @@ Decision* FindOneNeighbor::Next(Solver* const solver) {
       if (!limit_->Check()) {
         solver->GetLocalSearchMonitor()->BeginMakeNextNeighbor(ls_operator_);
         has_neighbor = ls_operator_->MakeNextNeighbor(delta, deltadelta);
-        printf("Mark4 ls_operator_->MakeNextNeighbor\n");
+        //printf("Mark4 ls_operator_->MakeNextNeighbor\n");
         solver->GetLocalSearchMonitor()->EndMakeNextNeighbor(
             ls_operator_, has_neighbor, delta, deltadelta);
       }
@@ -3083,11 +3084,13 @@ Decision* FindOneNeighbor::Next(Solver* const solver) {
         solver->GetLocalSearchMonitor()->EndFilterNeighbor(
             ls_operator_, mh_filter && move_filter);
 
-        printf("Mark5 %d %d %d\n", mh_filter, move_filter, hst_global_dronebalance);
+        //printf("Mark5 %d %d %d\n", mh_filter, move_filter, hst_global_dronebalance);
+
         hst_global_dronebalance = false;
-        
+
         if (mh_filter && move_filter) {
           solver->filtered_neighbors_ += 1;
+          //printf("Mark8 %ld \n",solver->filtered_neighbors_);
           assignment_copy->CopyIntersection(reference_assignment_.get());
           assignment_copy->CopyIntersection(delta);
           solver->GetLocalSearchMonitor()->BeginAcceptNeighbor(ls_operator_);
@@ -3095,7 +3098,7 @@ Decision* FindOneNeighbor::Next(Solver* const solver) {
           solver->GetLocalSearchMonitor()->EndAcceptNeighbor(ls_operator_,
                                                              accept);
           if (accept) { 
-            printf("Mark6 Accept\n");
+            //printf("Mark6 Accept\n");
 
             solver->accepted_neighbors_ += 1;
             assignment_->Store();

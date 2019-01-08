@@ -31,6 +31,9 @@
 #include <sys/time.h>
 #include <fstream>
 
+
+
+
 DEFINE_bool(routing_strong_debug_checks, false,
             "Run stronger checks in debug; these stronger tests might change "
             "the complexity of the code in particular.");
@@ -989,7 +992,7 @@ bool PathCumulFilter::AcceptPath(int64 path_start, int64 chain_start,
   int number_of_route_arcs = 0;
 
 
-  printf("Mark7 accept path pathcumulfilter \n");
+  //printf("Mark7 accept path pathcumulfilter \n");
 
   while (node < Size()) {
     const int64 next = GetNext(node);
@@ -1167,7 +1170,7 @@ bool PathCumulFilter::FinalizeAcceptPath() {
                      CapSub(new_max_end, new_min_start)));
   counter = counter + 1;
 
-  if (counter % 100000 == 0){
+  if (counter % 100000 == 0 ){
 
     // log to file !
 
